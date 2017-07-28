@@ -6,8 +6,7 @@
 # @File    : login.py
 # @Software: PyCharm
 # function : 登录江科大强智科技,教务系统,保存cookie,用seq_requests做其他操作
-
-import sys
+import os
 
 import requests
 from PIL import Image
@@ -60,7 +59,7 @@ def get_code():
         return [scode, sxh]
     except:
         print('网络问题,程序中断')
-        sys.exit(0)
+        os._exit(0)
 
 
 # 处理验证码
@@ -82,7 +81,7 @@ def handle_verify_code():
         return yanZ
     except:
         print('网络问题,程序中断')
-        sys.exit(0)
+        os._exit(0)
 
 
 def login():
@@ -102,7 +101,7 @@ def login():
             text = res.text
             if text.__contains__('该帐号不存在或密码错误'):
                 print('该帐号不存在或密码错误')
-                sys.exit(0)
+                os._exit(0)
             if text.__contains__('验证码错误!!'):
                 print('验证码错误')
             else:
@@ -111,7 +110,7 @@ def login():
                 print('登录成功,正在跳转')
     except:
         print('网络问题,程序中断')
-        sys.exit(0)
+        os._exit(0)
 
 
 if __name__ == '__main__':
