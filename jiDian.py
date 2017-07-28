@@ -73,3 +73,4 @@ if __name__ == '__main__':
     grade_list = get_grade_item(html)
     ji_dian = calculate(grade_list)
     print('你', time, '平均绩点为', ji_dian)
+    print('按任意键退出')
