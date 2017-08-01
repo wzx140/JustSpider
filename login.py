@@ -16,6 +16,9 @@ from config import user_name, password
 # 登录界面url
 login_url = 'http://jwgl.just.edu.cn:8080/'
 
+# 不需要验证码的url
+url_now = 'http://jwgl.just.edu.cn:8080/jsxsd/xk/LoginToXk'
+
 # 获取加密码,发送表单的url
 url = 'http://jwgl.just.edu.cn:8080/Logon.do'
 
@@ -85,33 +88,55 @@ def handle_verify_code():
 
 
 def login():
+    if user_name.startswith('15') or user_name.startswith('16'):
+        login_new()
+    else:
+        try:
+            seq_requests.get(login_url, headers=kv, timeout=3)
+            # 是否登录成功
+            flag = False
+            while flag is False:
+                yanZ = handle_verify_code()
+                code = get_code()
+                encode = encrypt(user_name, password, code[0], code[1])
+                form = {'useDogCode': '', 'encoded': encode, 'RANDOMCODE': yanZ}
+                data = {'method': 'logon'}
+                res = seq_requests.post(url, params=data, headers=kv, data=form, timeout=3)
+                res.encoding = 'utf-8'
+                res.raise_for_status()
+                text = res.text
+                if text.__contains__('该帐号不存在或密码错误'):
+                    print('该帐号不存在或密码错误')
+                    os._exit(0)
+                if text.__contains__('验证码错误!!'):
+                    print('验证码错误')
+                else:
+                    flag = True
+                    # print(text)
+                    print('登录成功,正在跳转')
+        except:
+            print('网络问题,程序中断')
+            os._exit(0)
+
+
+# 15,16可以用这个方法,不需要验证码
+def login_new():
+    form = {'USERNAME': user_name, 'PASSWORD': password}
     try:
-        seq_requests.get(login_url, headers=kv, timeout=3)
-        # 是否登录成功
-        flag = False
-        while flag is False:
-            yanZ = handle_verify_code()
-            code = get_code()
-            encode = encrypt(user_name, password, code[0], code[1])
-            form = {'useDogCode': '', 'encoded': encode, 'RANDOMCODE': yanZ}
-            data = {'method': 'logon'}
-            res = seq_requests.post(url, params=data, headers=kv, data=form, timeout=3)
-            res.encoding = 'utf-8'
-            res.raise_for_status()
-            text = res.text
-            if text.__contains__('该帐号不存在或密码错误'):
-                print('该帐号不存在或密码错误')
-                os._exit(0)
-            if text.__contains__('验证码错误!!'):
-                print('验证码错误')
-            else:
-                flag = True
-                # print(text)
-                print('登录成功,正在跳转')
+        res = seq_requests.post(url_now, data=form, headers=kv)
+        res.raise_for_status()
+        res.encoding = 'utf-8'
+        text = res.text
+        # print(text)
+        if text.__contains__('用户名或密码错误'):
+            print('用户名或密码错误')
+            os._exit(0)
+        else:
+            print('登录成功,正在跳转')
     except:
         print('网络问题,程序中断')
         os._exit(0)
 
 
 if __name__ == '__main__':
-    login()
+    login_new()
