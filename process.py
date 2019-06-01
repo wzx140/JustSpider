@@ -16,6 +16,9 @@ def calculate(grades: list) -> float:
                 grade['attribute'] != '任选' and '体育' not in grade['name'] and grade['credit']]
     for grade in cal_list:
         mark = grade['mark']
+        if mark == '通过':
+        	# 跳过大学生体测
+        	continue
         credit = float(grade['credit'])
         credit_sum += credit
         if mark.isdigit():
