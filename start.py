@@ -1,9 +1,14 @@
 import re
+import warnings
 from argparse import ArgumentParser
 
-from config import user_name, password, start_date
+import requests as rq
+
+from config import user_name, password, start_date, password_
 from fetch import Just
 from process import class_print, table_print, calculate
+
+warnings.filterwarnings("ignore")
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='轻松获取just教务信息')
@@ -19,8 +24,14 @@ if __name__ == '__main__':
     class_parser.add_argument('-jzw', type=str, default=None, help='教学楼')
 
     args = vars(parser.parse_args())
-    just = Just(user_name, password)
-    just.login()
+    just = Just(user_name, password, password_)
+    # 网络有问题时，使用校园vpn
+    try:
+        just.login()
+    except (rq.exceptions.ConnectionError, rq.exceptions.ConnectTimeout):
+        just.enable_vpn()
+        just.login()
+
     if args['command'] == 'grade':
         date = args['date']
         # 判断date是否合法
@@ -32,7 +43,7 @@ if __name__ == '__main__':
         elif re.match(r'[2-9]\d{3}-2\d{3}', date):
             year1, year2 = date.split('-')
             if int(year1) >= int(year2):
-                print(date + '日期不合法')
+                raise RuntimeError(date + '日期不合法')
             else:
                 # xxxx-xxxx的绩点计算
                 times = []
@@ -55,8 +66,6 @@ if __name__ == '__main__':
                         table_print(all_grades[i])
                     print()
         else:
-            print(date + '日期不合法')
+            raise RuntimeError(date + '日期不合法')
     elif args['command'] == 'class':
         class_print(just.get_class_room(start_date=start_date, now_date=args['date'], xq=args['xq'], jzw=args['jzw']))
-    else:
-        pass

@@ -21,12 +21,12 @@ class Vpn(object):
 
     def login(self):
         form = {'username': self.__user_name, 'password': self.__password, 'realm': 'LDAP-REALM'}
-        res = self.__seq_req.post(self.LOGIN_URL, data=form, headers=self.REQUEST_HEADER, verify=False)
+        res = self.__seq_req.post(self.LOGIN_URL, data=form, headers=self.REQUEST_HEADER, verify=False, timeout=5)
         res.raise_for_status()
         if 'failed' in res.url:
-            raise RuntimeError('用户名或密码错误')
+            raise RuntimeError('vpn用户名或密码错误')
         elif 'https://vpn.just.edu.cn/dana/home/starter.cgi' in res.url:
-            print('登录成功')
+            print('vpn登录成功')
         elif 'user-confirm' in res.url:
             # 继续会话
             res.encoding = 'utf-8'
@@ -34,20 +34,19 @@ class Vpn(object):
             form_data = doc('#DSIDFormDataStr').attr('value')
             form = {'btnContinue': '继续会话', 'FormDataStr': form_data}
             res = self.__seq_req.post('https://vpn.just.edu.cn/dana-na/auth/url_default/login.cgi',
-                                      headers=self.REQUEST_HEADER, data=form)
+                                      headers=self.REQUEST_HEADER, data=form, timeout=5)
             if 'check=yes' in res.url:
-                print('登录成功')
+                print('vpn登录成功')
             else:
-                raise RuntimeError('请手动退出会话')
+                raise RuntimeError('请手动退出vpn会话')
         else:
-            raise RuntimeError('未知错误，登录失败')
+            raise RuntimeError('未知错误，vpn登录失败')
 
-    def get_session(self):
-        return self.__seq_req
-
-    def request(self, url: str, method: str, data: dict = None):
+    def request(self, url: str, headers: dict, method: str, data: dict = None):
         """
         请求
+        :param headers:
+        :param data:
         :param method: post or get
         :param url:
         :return:
@@ -67,11 +66,11 @@ class Vpn(object):
         vpn_url = self.VPN_URL.format(domain=result.hostname, path=path, port=port)
 
         if method == 'get':
-            res = self.__seq_req.get(vpn_url, headers=self.REQUEST_HEADER)
+            res = self.__seq_req.get(vpn_url, headers=headers, timeout=5)
         elif method == 'post':
-            res = self.__seq_req.post(vpn_url, headers=self.REQUEST_HEADER, data=data)
+            res = self.__seq_req.post(vpn_url, headers=headers, data=data, timeout=5)
         else:
-            raise RuntimeError('非法请求')
+            raise RuntimeError('vpn非法请求')
 
         # 处理不信任证书问题
         res.raise_for_status()
@@ -88,5 +87,5 @@ class Vpn(object):
             form = {'xsauth': xsauth, 'url': url, 'certHost': certHost, 'certPort': certPort, 'certDigest': certDigest,
                     'errorCount': errorCount, 'notAfter': notAfter, 'action': '继续'}
             res = self.__seq_req.post('https://vpn.just.edu.cn/dana/home/invalidsslsite_confirm.cgi',
-                                      headers=self.REQUEST_HEADER, data=form)
+                                      headers=headers, data=form, timeout=5)
         return res

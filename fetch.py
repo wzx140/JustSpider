@@ -1,8 +1,9 @@
-import re
 from datetime import datetime
 
 import requests as rq
 from pyquery import PyQuery as pq
+
+from vpn import Vpn
 
 
 class Just(object):
@@ -27,31 +28,33 @@ class Just(object):
     # 节次代号
     LESSON_ID = ['上午第一大节', '上午第二大节', '下午第一大节', '下午第二大节', '晚上第一大节']
 
-    def __init__(self, user_name: str, pass_word: str) -> None:
+    def __init__(self, user_name: str, pass_word: str, pass_word_: str = None) -> None:
         self.user_name = user_name
         self.__pass_word = pass_word
-
+        self.__pass_word_ = pass_word_
         self.__seq_req = rq.session()
+        # vpn开启标记
+        self.__vpn_flag = False
 
-    def login(self) -> bool:
+    def login(self):
         form = {'USERNAME': self.user_name, 'PASSWORD': self.__pass_word}
-        res = self.__seq_req.post(self.LOGIN_URL, data=form, headers=self.REQUEST_HEADER)
+        if not self.__vpn_flag:
+            res = self.__seq_req.post(self.LOGIN_URL, data=form, headers=self.REQUEST_HEADER, timeout=5)
+        else:
+            res = self.__vpn.request(self.LOGIN_URL, data=form, method='post', headers=self.REQUEST_HEADER)
         res.raise_for_status()
         # 出错页面与登陆成功页面编码不同
         res.encoding = res.apparent_encoding
         text = res.text
         # print(text)
         if '用户名或密码错误' in text:
-            print('用户名或密码错误')
-            return False
+            raise RuntimeError('教务用户名或密码错误')
 
         elif '用户名或密码不能为空' in text:
-            print('用户名或密码不能为空')
-            return False
+            raise RuntimeError('教务用户名或密码不能为空')
 
         else:
             print('教务系统登录成功')
-            return True
 
     def get_grade(self, date: str) -> []:
         """
@@ -59,18 +62,11 @@ class Just(object):
         :param date: xxxx-xxxx-1,2
         :return:
         """
-        # 判断date是否合法
-        if re.match(r'[2-9]\d{3}-2\d{3}-[12]', date):
-            year1, year2, term = date.split('-')
-            if int(year1) + 1 != int(year2):
-                print(date + '不合法')
-                return
-        else:
-            print(date + '不合法')
-            return
-
         form = {'kksj': date, 'kcxz': None, 'kcmc': '', 'xsfs': 'all'}
-        res = self.__seq_req.post(self.GRADE_URL, headers=self.REQUEST_HEADER, data=form)
+        if not self.__vpn_flag:
+            res = self.__seq_req.post(self.GRADE_URL, headers=self.REQUEST_HEADER, data=form, timeout=5)
+        else:
+            res = self.__vpn.request(self.GRADE_URL, data=form, method='post', headers=self.REQUEST_HEADER)
         res.raise_for_status()
         res.encoding = 'UTF-8'
         # 解析成绩
@@ -104,8 +100,10 @@ class Just(object):
         :param now_date: 查询时间 xxxx-xx-xx
         :return:
         """
-        # todo: 这里有一个异常
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        except ValueError:
+            raise RuntimeError(start_date + '不合法')
         # 确定学年，周数，星期
         year = start_date.year
         month = start_date.month
@@ -116,8 +114,10 @@ class Just(object):
         if not now_date:
             now_date = datetime.today()
         else:
-            # todo: 这里有一个异常
-            now_date = datetime.strptime(now_date, '%Y-%m-%d')
+            try:
+                now_date = datetime.strptime(now_date, '%Y-%m-%d')
+            except ValueError:
+                raise RuntimeError(now_date + '不合法')
         week_label = now_date.weekday()
         week_index = (now_date - start_date).days // 7 + 1
 
@@ -128,13 +128,17 @@ class Just(object):
             if result:
                 xq = result
                 # 获取教学楼
-                res = self.__seq_req.post(self.BUILDING_URL, headers=self.REQUEST_HEADER, data={'xqid': xq})
+                if not self.__vpn_flag:
+                    res = self.__seq_req.post(self.BUILDING_URL, headers=self.REQUEST_HEADER, data={'xqid': xq},
+                                              timeout=5)
+                else:
+                    res = self.__vpn.request(self.BUILDING_URL, data={'xqid': xq}, method='post',
+                                             headers=self.REQUEST_HEADER)
                 res.raise_for_status()
                 res.encoding = 'utf-8'
                 buildings = {item['dmmc']: item['dm'] for item in res.json()}
             else:
-                print('未找到校区' + xq)
-                return
+                raise RuntimeError('未找到校区' + xq)
 
         if jzw and buildings:
             jzw = jzw.upper()
@@ -142,8 +146,7 @@ class Just(object):
             if result:
                 jzw = result
             else:
-                print('未找到教学楼' + jzw)
-                return
+                raise RuntimeError('未找到教学楼' + jzw)
 
         form = {'xnxqh': term,
                 'skyx': '',
@@ -153,7 +156,11 @@ class Just(object):
                 'zc2': week_index,
                 'jc1': '',
                 'jc2': '', }
-        res = self.__seq_req.post(self.CLASS_URL, headers=self.REQUEST_HEADER, data=form)
+
+        if not self.__vpn_flag:
+            res = self.__seq_req.post(self.CLASS_URL, headers=self.REQUEST_HEADER, data=form, timeout=5)
+        else:
+            res = self.__vpn.request(self.CLASS_URL, data=form, method='post', headers=self.REQUEST_HEADER)
         res.raise_for_status()
         res.encoding = 'utf-8'
         # 解析表格
@@ -171,3 +178,14 @@ class Just(object):
                 if not td.cssselect('div'):
                     class_empty_list.append(self.LESSON_ID[i])
         return empty
+
+    def enable_vpn(self):
+        if self.__pass_word_:
+            self.__vpn = Vpn(self.user_name, self.__pass_word_, self.__seq_req)
+            self.__vpn.login()
+            self.__vpn_flag = True
+        else:
+            raise RuntimeError('vpn密码为空')
+
+    def disable_vpn(self):
+        self.__vpn_flag = False
